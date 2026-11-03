@@ -1,4 +1,4 @@
-module kprobe
+module github.com/khan-lau/kprobe-sdk
 
 go 1.24.0
 
