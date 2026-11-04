@@ -30,7 +30,7 @@ import (
 
 err := kprobe.Init(kprobe.Option{ConfigPath: "conf/app.toml"}) // 1. 初始化
 mux.Handle("/metrics", promhttp.Handler())                     // 2. 宿主挂载 /metrics
-kprobe.TopicLag("order-create", 3.2)                           // 3. 业务侧上报 Topic 延迟
+kprobe.TopicLag("order-create", kprobe.TopicLagReceive, 3.2)     // 3. 业务侧上报 Topic 延迟
 ```
 
 完整接入范例(日志回调构造、Option 全项、抓取与打印)见 [SDK 使用手册](doc/SDK使用手册.md)。
@@ -40,7 +40,7 @@ kprobe.TopicLag("order-create", 3.2)                           // 3. 业务侧�
 | API | 说明 |
 | --- | --- |
 | `Init(opt Option) error` | 初始化并注册指标, 启动时调用一次; 重复调用返回 `ErrAlreadyInit`, `Close` 后返回 `ErrClosed`; 失败(含 panic)自动回滚, 可重试, 也可忽略继续运行 |
-| `TopicLag(topic string, lagSeconds float64)` | 上报 Topic 消息延迟(秒), gauge 同名覆盖; 超出 `MaxTopics`(默认 256)的新 topic 拒绝并打日志, 不报错; 多 goroutine 并发调用安全(热路径无锁) |
+| `TopicLag(topic, lagType string, lagSeconds float64)` | 上报 Topic 指定类型延迟(秒), `lagType` 用预定义 `TopicLagReceive`/`TopicLagProcess` 或业务自定义; gauge 同覆盖; 超出 `MaxTopics`(默认 256, 按 topic×type 组合计数)的新组合拒绝并打日志, 不报错; 多 goroutine 并发调用安全(热路径无锁) |
 | `Close()` | 停止探针(幂等): 拒绝后续 Init 与 TopicLag; 指标注册表仍可读, 支持退出前最后一次抓取 |
 
 **Option 关键项**: `ConfigPath`(必填)/`LogPaths`——相对路径以可执行文件所在目录为基准换算为绝对路径(分隔符随平台); `CacheTTL`(默认 15s); `MaxTopics`(默认 256); `Log`——klogger `AppLogFuncWithTag` 日志回调, **仅允许 Init 时一次性注入, 之后不可更改**, 未注入则内部日志静默丢弃。
@@ -55,7 +55,7 @@ kprobe.TopicLag("order-create", 3.2)                           // 3. 业务侧�
 | `kprobe_gc_pause_total_ns` | Counter | GC 暂停累计(NumGC 回绕按 2^32 补差, 保证单调) |
 | `kprobe_gc_pause_last_ns` | Gauge | 最近一次 GC 暂停耗时 |
 | `kprobe_gc_count_total` | Counter | GC 触发次数(频率 = rate) |
-| `kprobe_topic_lag_seconds{topic}` | Gauge | 业务 Topic 消息延迟(唯一由业务调用实时写入的指标) |
+| `kprobe_topic_lag_seconds{topic,type}` | Gauge | 业务 Topic 各类型(接收/处理)延迟(唯一由业务调用实时写入的指标) |
 | `kprobe_service_info{exe_path,config_path,log_path}` | Gauge(=1) | 服务身份信息, 三路径均为绝对路径; 可作 `absent()` 探针失联告警锚点 |
 
 另自动附带 client_golang 内置的 `go_*` / `process_*` 指标。

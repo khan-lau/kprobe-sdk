@@ -23,8 +23,17 @@ const (
 
 	// defaultCacheTTL 内存/GC 指标缓存有效期默认值, 与 agent 抓取周期对齐
 	defaultCacheTTL = 15 * time.Second
-	// defaultMaxTopics Topic 数量上限默认值, 防指标基数失控
+	// defaultMaxTopics Topic×类型组合数上限默认值, 防指标基数失控
 	defaultMaxTopics = 256
+)
+
+// TopicLagType 预定义的延迟类型(kprobe_topic_lag_seconds 的 type label 取值),
+// 也支持业务自定义字符串; MaxTopics 上限按 topic×type 组合计数
+const (
+	// TopicLagReceive 接收延迟: 消息产生(或到达 MQ)至业务服务接收到
+	TopicLagReceive = "receive"
+	// TopicLagProcess 处理延迟: 业务服务接收到处理完成
+	TopicLagProcess = "process"
 )
 
 // Option Init 的配置项。全部显式注入, SDK 不读取环境变量或配置文件。
@@ -112,25 +121,27 @@ func Init(opt Option) (err error) {
 	return nil
 }
 
-// TopicLag 上报业务 Topic 的消息延迟(秒), 同名 topic 覆盖旧值(gauge 语义)。
-// 超出 MaxTopics 上限的新 topic 会被拒绝并打日志, 不报错、不影响已上报 topic;
-// 未初始化时静默丢弃(尚无实例可记录日志), 已 Close 时丢弃并打日志。
-func TopicLag(topic string, lagSeconds float64) {
+// TopicLag 上报业务 Topic 的指定类型延迟(秒), 同 topic 同 type 覆盖旧值(gauge 语义),
+// 同名 topic 的不同 type 为独立序列。lagType 建议 TopicLagReceive/TopicLagProcess,
+// 也接受业务自定义字符串。超出 MaxTopics 上限(topic×type 组合数)的新组合会被拒绝
+// 并打日志, 不报错、不影响已上报组合; 未初始化时静默丢弃(尚无实例可记录日志),
+// 已 Close 时丢弃并打日志。
+func TopicLag(topic, lagType string, lagSeconds float64) {
 	// 热路径无锁: 原子读实例指针与停止标志
 	p := current.Load()
 	if p == nil {
 		return
 	}
 	if stopped.Load() {
-		p.log(klog.WarnLevel, "topic lag dropped, topic=%q: kprobe closed", topic)
+		p.log(klog.WarnLevel, "topic lag dropped, topic=%q type=%q: kprobe closed", topic, lagType)
 		return
 	}
 	defer func() {
 		if r := recover(); r != nil {
-			p.log(klog.ErrorLevel, "topic lag panic recovered, topic=%q: %v", topic, r)
+			p.log(klog.ErrorLevel, "topic lag panic recovered, topic=%q type=%q: %v", topic, lagType, r)
 		}
 	}()
-	p.topics.set(topic, lagSeconds)
+	p.topics.set(topic, lagType, lagSeconds)
 }
 
 // Close 停止探针(幂等, 重复调用无副作用): 拒绝后续 Init 与 TopicLag 上报;
