@@ -31,5 +31,5 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
-metrics_test.go
-kprobe_test.go
+# metrics_test.go
+# kprobe_test.go
