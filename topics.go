@@ -26,8 +26,8 @@ type topicSet struct {
 func newTopicSet(logf klog.AppLogFuncWithTag, max int) *topicSet {
 	return &topicSet{
 		vec: prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: "kprobe_topic_lag_seconds",
-			Help: "业务 Topic 的消息延迟时间(秒).",
+			Name: "kprobe_topic_lag_milliseconds",
+			Help: "业务 Topic 的消息延迟时间(毫秒).",
 		}, []string{"topic", "type"}),
 		max:  max,
 		logf: logf,
@@ -35,7 +35,7 @@ func newTopicSet(logf klog.AppLogFuncWithTag, max int) *topicSet {
 }
 
 // set 上报单个 topic 指定类型的延迟; 空 topic/type 或超限的新组合拒绝并打日志
-func (t *topicSet) set(topic, lagType string, lagSeconds float64) {
+func (t *topicSet) set(topic, lagType string, lagMilliseconds float64) {
 	if topic == "" {
 		t.warn("topic lag dropped: empty topic name")
 		return
@@ -47,20 +47,20 @@ func (t *topicSet) set(topic, lagType string, lagSeconds float64) {
 
 	// 热路径: 已建句柄的 topic×type 组合, 原子读 + 原子写, 无锁
 	if v, ok := t.gauges.Load(topic + "\x00" + lagType); ok {
-		v.(prometheus.Gauge).Set(lagSeconds)
+		v.(prometheus.Gauge).Set(lagMilliseconds)
 		return
 	}
-	t.addSlow(topic, lagType, lagSeconds)
+	t.addSlow(topic, lagType, lagMilliseconds)
 }
 
 // addSlow 慢路径: 新 topic×type 组合首次上报, 互斥校验组合数上限并创建缓存句柄
-func (t *topicSet) addSlow(topic, lagType string, lagSeconds float64) {
+func (t *topicSet) addSlow(topic, lagType string, lagMilliseconds float64) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
 	// double-check: 并发下另一 goroutine 可能已完成创建
 	if v, ok := t.gauges.Load(topic + "\x00" + lagType); ok {
-		v.(prometheus.Gauge).Set(lagSeconds)
+		v.(prometheus.Gauge).Set(lagMilliseconds)
 		return
 	}
 	if t.count >= t.max {
@@ -70,7 +70,7 @@ func (t *topicSet) addSlow(topic, lagType string, lagSeconds float64) {
 	g := t.vec.WithLabelValues(topic, lagType)
 	t.gauges.Store(topic+"\x00"+lagType, g)
 	t.count++
-	g.Set(lagSeconds)
+	g.Set(lagMilliseconds)
 }
 
 // size 已上报 topic×type 组合数(测试与治理观测用)

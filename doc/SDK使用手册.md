@@ -37,7 +37,7 @@ var wantMetrics = []string{
 	"kprobe_gc_pause_total_ns",
 	"kprobe_gc_pause_last_ns",
 	"kprobe_gc_count_total",
-	"kprobe_topic_lag_seconds",
+	"kprobe_topic_lag_milliseconds",
 	"kprobe_service_info",
 	"process_start_time_seconds", // client_golang 内置, 平台不支持该采集器时自动缺席
 }
@@ -198,9 +198,9 @@ kprobe.TopicLag("order-create", kprobe.TopicLagReceive, 3.2) // 接收延迟
 kprobe.TopicLag("order-create", kprobe.TopicLagProcess, 0.8) // 处理延迟(同 topic 独立序列)
 ```
 
-- 上报业务 Topic 的指定类型延迟(秒), gauge 语义, 同 topic 同 type 覆盖旧值
+- 上报业务 Topic 的指定类型延迟(毫秒), gauge 语义, 同 topic 同 type 覆盖旧值
 - `type` label 建议用预定义常量 `TopicLagReceive`(接收延迟: 消息产生/到达 MQ 至业务接收)与 `TopicLagProcess`(处理延迟: 接收至处理完成), 也接受业务自定义字符串
-- 每个 topic×type 组合一条 `kprobe_topic_lag_seconds{topic="...",type="..."}` 序列, 惰性创建
+- 每个 topic×type 组合一条 `kprobe_topic_lag_milliseconds{topic="...",type="..."}` 序列, 惰性创建
 - 超出 `MaxTopics` 的新组合(按 topic×type 计数)被拒绝并打 W 日志, 不报错、不影响已上报组合; 空 topic 名或空 type 拒绝
 - 未初始化时静默丢弃; 已 `Close` 后丢弃并打日志; 内部 recover, 不向业务侧抛 panic
 
@@ -225,7 +225,7 @@ kprobe.TopicLag("order-create", kprobe.TopicLagProcess, 0.8) // 处理延迟(同
 | `kprobe_gc_pause_total_ns` | Counter | `runtime.MemStats.PauseTotalNs` | GC 暂停累计时间(NumGC 回绕按 2^32 补差, 保证单调) |
 | `kprobe_gc_pause_last_ns` | Gauge | `MemStats.PauseNs[(NumGC+255)%256]` | 最近一次 GC 耗时 |
 | `kprobe_gc_count_total` | Counter | `runtime.MemStats.NumGC` | GC 触发次数(频率 = rate) |
-| `kprobe_topic_lag_seconds{topic,type}` | Gauge | SDK API 上报 | 每个 Topic 各类型(接收/处理)的消息延迟时间 |
+| `kprobe_topic_lag_milliseconds{topic,type}` | Gauge | SDK API 上报 | 每个 Topic 各类型(接收/处理)的消息延迟时间(毫秒) |
 | `kprobe_service_info{exe_path,config_path,log_path}` | Gauge(=1) | Init 注册 | 宿主服务身份信息; 三个路径均为绝对路径(config/log 相对路径按 exe 目录换算, 分隔符随平台) |
 | `process_start_time_seconds` | Gauge | client_golang 内置 | 进程启动时刻(平台不支持该采集器时缺席) |
 

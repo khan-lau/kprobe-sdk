@@ -79,7 +79,7 @@ func TestMetricsOutput(t *testing.T) {
 		"kprobe_gc_pause_total_ns",
 		"kprobe_gc_pause_last_ns",
 		"kprobe_gc_count_total",
-		"kprobe_topic_lag_seconds",
+		"kprobe_topic_lag_milliseconds",
 		"kprobe_service_info",
 	}
 	got := map[string]bool{}
@@ -107,7 +107,7 @@ func TestMetricsOutput(t *testing.T) {
 	}
 
 	// topic 延迟与身份指标的值
-	val := testutilCollect(t, current.Load(), "kprobe_topic_lag_seconds")
+	val := testutilCollect(t, current.Load(), "kprobe_topic_lag_milliseconds")
 	if val != 3.2 {
 		t.Fatalf("topic lag = %v, want 3.2", val)
 	}
@@ -225,7 +225,7 @@ func TestTopicLag(t *testing.T) {
 	}
 	wantVals := map[string]float64{"receive": 1.5, "process": 0.8}
 	for lagType, want := range wantVals {
-		if v := testutilCollectSeries(t, current.Load(), "kprobe_topic_lag_seconds",
+		if v := testutilCollectSeries(t, current.Load(), "kprobe_topic_lag_milliseconds",
 			map[string]string{"topic": "a", "type": lagType}); v != want {
 			t.Fatalf("topic a type=%s = %v, want %v", lagType, v, want)
 		}
@@ -280,7 +280,7 @@ func TestTopicLagConcurrent(t *testing.T) {
 	}
 	found := map[string]float64{}
 	for _, mf := range mfs {
-		if mf.GetName() != "kprobe_topic_lag_seconds" {
+		if mf.GetName() != "kprobe_topic_lag_milliseconds" {
 			continue
 		}
 		for _, m := range mf.GetMetric() {
